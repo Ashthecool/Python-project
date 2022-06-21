@@ -8,6 +8,7 @@ Artwork from https://kenney.nl/assets/space-shooter-redux
 """
 import random
 import arcade
+import arcade.sound
 import kwargs as kwargs
 import self as self
 from playsound import playsound
@@ -24,8 +25,10 @@ PLAYER_SPEED_X = 5
 PLAYER_START_X = SCREEN_WIDTH / 2
 PLAYER_START_Y = 50
 PLAYER_SHOT_SPEED = 4
+ITEM_SPEED = -3
 
 FIRE_KEY = arcade.key.SPACE
+slot_sound = arcade.load_sound("Sounds/Pew.wav")
 
 
 class Player(arcade.Sprite):
@@ -67,11 +70,11 @@ class PlayerShot(arcade.Sprite):
     A shot fired by the Player
     """
 
-    def __init__(self, center_x=0, center_y=0):
+    def __init__(self, center_x=0, center_y
+    =0):
         """
         Setup new PlayerShot object
         """
-
 
         # Set the graphics to use for the bullets.
         graphics = [
@@ -99,6 +102,19 @@ class PlayerShot(arcade.Sprite):
             self.kill()
 
 
+class Items(arcade.Sprite):
+    def __init__(self, center_x=0, center_y=150,):
+        stars = [
+            "images/Power-ups/star_bronze.png",
+            "images/Power-ups/star_silver.png",
+            "images/Power-ups/star_gold.png"
+        ]
+        super().__init__(random.choice(stars), SPRITE_SCALING)
+
+        self.center_x = center_x
+        self.center_y = center_y
+        self.change_y = ITEM_SPEED
+
 class MyGame(arcade.Window):
     """
     Main application class.
@@ -113,7 +129,9 @@ class MyGame(arcade.Window):
         super().__init__(width, height)
 
         # Variable that will hold a list of shots fired by the player
+        self.space_pressed = None
         self.player_shot_list = None
+        self.player_shot_sound = None
 
         # Set up the player info
         self.player_sprite = None
@@ -164,6 +182,8 @@ class MyGame(arcade.Window):
         # Sprite lists
         self.player_shot_list = arcade.SpriteList()
 
+        self.player_shot_sound = arcade.Sound("Sounds/Pew.wav")
+
         # Create a Player object
         self.player_sprite = Player(
             center_x=PLAYER_START_X,
@@ -183,7 +203,6 @@ class MyGame(arcade.Window):
 
         # Draw the player sprite
         self.player_sprite.draw()
-
 
         # Draw players score on screen
         arcade.draw_text(
@@ -231,6 +250,8 @@ class MyGame(arcade.Window):
             self.left_pressed = True
         elif key == arcade.key.RIGHT:
             self.right_pressed = True
+        elif key == arcade.key.SPACE:
+            self.space_pressed = True
 
         if key == FIRE_KEY:
             new_shot = PlayerShot(
@@ -239,6 +260,7 @@ class MyGame(arcade.Window):
             )
 
             self.player_shot_list.append(new_shot)
+            self.player_shot_sound.play()
 
     def on_key_release(self, key, modifiers):
         """
@@ -253,6 +275,8 @@ class MyGame(arcade.Window):
             self.left_pressed = False
         elif key == arcade.key.RIGHT:
             self.right_pressed = False
+        elif key == arcade.key.SPACE:
+            self.space_pressed = True
 
     def on_joybutton_press(self, joystick, button_no):
         print("Button pressed:", button_no)
