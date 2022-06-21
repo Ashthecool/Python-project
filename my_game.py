@@ -6,9 +6,11 @@ This program uses the Arcade library found at http://arcade.academy
 Artwork from https://kenney.nl/assets/space-shooter-redux
 
 """
-
+import random
 import arcade
-
+import kwargs as kwargs
+import self as self
+from playsound import playsound
 
 SPRITE_SCALING = 0.5
 
@@ -24,6 +26,7 @@ PLAYER_START_Y = 50
 PLAYER_SHOT_SPEED = 4
 
 FIRE_KEY = arcade.key.SPACE
+
 
 class Player(arcade.Sprite):
     """
@@ -43,7 +46,6 @@ class Player(arcade.Sprite):
 
         # Pass arguments to class arcade.Sprite
         super().__init__(**kwargs)
-
 
     def update(self):
         """
@@ -70,12 +72,19 @@ class PlayerShot(arcade.Sprite):
         Setup new PlayerShot object
         """
 
-        # Set the graphics to use for the sprite
-        super().__init__("images/Lasers/laserBlue01.png", SPRITE_SCALING)
+
+        # Set the graphics to use for the bullets.
+        graphics = [
+            "images/Lasers/laserBlue01.png",
+            "images/Lasers/laserRed01.png",
+            "images/Lasers/laserGreen11.png"
+        ]
+
+        super().__init__(random.choice(graphics), SPRITE_SCALING)
 
         self.center_x = center_x
         self.center_y = center_y
-        self.change_y = PLAYER_SHOT_SPEED
+        self.change_y = PLAYER_SHOT_SPEED * 2
 
     def update(self):
         """
@@ -139,8 +148,7 @@ class MyGame(arcade.Window):
             print("No joysticks found")
             self.joystick = None
 
-
-            #self.joystick.
+            # self.joystick.
         # Set the background color
         arcade.set_background_color(arcade.color.AMAZON)
 
@@ -176,12 +184,13 @@ class MyGame(arcade.Window):
         # Draw the player sprite
         self.player_sprite.draw()
 
+
         # Draw players score on screen
         arcade.draw_text(
             "SCORE: {}".format(self.player_score),  # Text to show
-            10,                  # X position
+            10,  # X position
             SCREEN_HEIGHT - 20,  # Y positon
-            arcade.color.WHITE   # Color of text
+            arcade.color.WHITE  # Color of text
         )
 
     def on_update(self, delta_time):
@@ -226,7 +235,7 @@ class MyGame(arcade.Window):
         if key == FIRE_KEY:
             new_shot = PlayerShot(
                 self.player_sprite.center_x,
-                self.player_sprite.center_y
+                self.player_sprite.center_y,
             )
 
             self.player_shot_list.append(new_shot)
@@ -258,6 +267,7 @@ class MyGame(arcade.Window):
 
     def on_joyhat_motion(self, joystick, hat_x, hat_y):
         print("Joystick hat ({}, {})".format(hat_x, hat_y))
+
 
 def main():
     """
