@@ -7,14 +7,14 @@ Artwork from https://kenney.nl/assets/space-shooter-redux
 
 """
 import random
+import time
+
 import arcade
 import arcade.sound
-import kwargs as kwargs
 import self as self
-from playsound import playsound
 
 SPRITE_SCALING = 0.5
-
+self.check = None
 # Set the size of the screen
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
@@ -26,9 +26,11 @@ PLAYER_START_X = SCREEN_WIDTH / 2
 PLAYER_START_Y = 50
 PLAYER_SHOT_SPEED = 4
 ITEM_SPEED = -3
+ITEM_GENERATE_COUNT = 1
 
 FIRE_KEY = arcade.key.SPACE
 slot_sound = arcade.load_sound("Sounds/Pew.wav")
+collect_sound = arcade.load_sound("Sounds/Coin.wav")
 
 
 class Player(arcade.Sprite):
@@ -50,6 +52,8 @@ class Player(arcade.Sprite):
         # Pass arguments to class arcade.Sprite
         super().__init__(**kwargs)
 
+        self.draw_hit_box()
+
     def update(self):
         """
         Move the sprite
@@ -58,7 +62,7 @@ class Player(arcade.Sprite):
         # Update center_x
         self.center_x += self.change_x
 
-        # Don't let the player move off screen
+        # Don't let the player move off-screen
         if self.left < 0:
             self.left = 0
         elif self.right > SCREEN_WIDTH - 1:
@@ -69,6 +73,8 @@ class PlayerShot(arcade.Sprite):
     """
     A shot fired by the Player
     """
+
+    self.draw_hit_box(self, tuple[1, 4, 6], line_thickness=0)
 
     def __init__(self, center_x=0, center_y
     =0):
@@ -87,7 +93,7 @@ class PlayerShot(arcade.Sprite):
 
         self.center_x = center_x
         self.center_y = center_y
-        self.change_y = PLAYER_SHOT_SPEED * 2
+        self.change_y = PLAYER_SHOT_SPEED
 
     def update(self):
         """
@@ -96,6 +102,7 @@ class PlayerShot(arcade.Sprite):
 
         # Update y position
         self.center_y += self.change_y
+        self.change_y += 0.2
 
         # Remove shot when over top of screen
         if self.bottom > SCREEN_HEIGHT:
@@ -103,17 +110,29 @@ class PlayerShot(arcade.Sprite):
 
 
 class Items(arcade.Sprite):
-    def __init__(self, center_x=0, center_y=150,):
+    def __init__(self, center_x=0, center_y=150, ):
         stars = [
             "images/Power-ups/star_bronze.png",
             "images/Power-ups/star_silver.png",
             "images/Power-ups/star_gold.png"
         ]
+
         super().__init__(random.choice(stars), SPRITE_SCALING)
 
         self.center_x = center_x
         self.center_y = center_y
+        self.angle = 90
         self.change_y = ITEM_SPEED
+        self.change_angle = 4
+
+    def update(self):
+        # Update Y placement
+        self.center_y += self.change_y
+        self.angle += self.change_angle
+
+        if self.center_x < -SCREEN_HEIGHT:
+            self.kill()
+
 
 class MyGame(arcade.Window):
     """
@@ -129,6 +148,8 @@ class MyGame(arcade.Window):
         super().__init__(width, height)
 
         # Variable that will hold a list of shots fired by the player
+        self.player_collect_sound = None
+        self.item_sprite_list = None
         self.space_pressed = None
         self.player_shot_list = None
         self.player_shot_sound = None
@@ -168,7 +189,7 @@ class MyGame(arcade.Window):
 
             # self.joystick.
         # Set the background color
-        arcade.set_background_color(arcade.color.AMAZON)
+        arcade.set_background_color(arcade.color.BLACK_OLIVE)
 
     def setup(self):
         """ Set up the game and initialize the variables. """
@@ -181,14 +202,25 @@ class MyGame(arcade.Window):
 
         # Sprite lists
         self.player_shot_list = arcade.SpriteList()
+        self.player_sprite = arcade.SpriteList()
+        self.item_sprite_list = arcade.SpriteList()
 
+        # Shooting Sound
         self.player_shot_sound = arcade.Sound("Sounds/Pew.wav")
+        self.player_collect_sound = arcade.Sound("Sounds/Coin.wav")
 
         # Create a Player object
         self.player_sprite = Player(
             center_x=PLAYER_START_X,
             center_y=PLAYER_START_Y
         )
+
+        for l in range(ITEM_GENERATE_COUNT):
+            new_item = Items(
+                center_x=random.randrange(SCREEN_WIDTH),
+                center_y=SCREEN_HEIGHT
+            )
+            self.item_sprite_list.append(new_item)
 
     def on_draw(self):
         """
@@ -204,11 +236,14 @@ class MyGame(arcade.Window):
         # Draw the player sprite
         self.player_sprite.draw()
 
+        # Draw the falling Items
+        self.item_sprite_list.draw()
+
         # Draw players score on screen
         arcade.draw_text(
             "SCORE: {}".format(self.player_score),  # Text to show
             10,  # X position
-            SCREEN_HEIGHT - 20,  # Y positon
+            SCREEN_HEIGHT - 20,  # Y position
             arcade.color.WHITE  # Color of text
         )
 
@@ -235,6 +270,25 @@ class MyGame(arcade.Window):
 
         # Update the player shots
         self.player_shot_list.update()
+
+        # Update the Items
+        self.item_sprite_list.update()
+
+        new_star = Items(
+            center_x=random.randrange(SCREEN_WIDTH),
+            center_y=SCREEN_HEIGHT
+        )
+        if random.randint(1, 10) == 3:
+            self.item_sprite_list.append(new_star)
+
+        # Check for collision with stars and spaceship.
+        star_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.item_sprite_list)
+
+        for stars in star_hit_list:
+            stars.remove_from_sprite_lists()
+            self.player_collect_sound.play()
+            self.player_score += 10
+
 
     def on_key_press(self, key, modifiers):
         """
