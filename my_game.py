@@ -31,6 +31,9 @@ ITEM_GENERATE_COUNT = 1
 FIRE_KEY = arcade.key.SPACE
 slot_sound = arcade.load_sound("Sounds/Pew.wav")
 collect_sound = arcade.load_sound("Sounds/Coin.wav")
+power_up_sound = arcade.load_sound("Sounds/Win.wav")
+charging = arcade.load_sound("Sounds/Charging....wav")
+boom = arcade.load_sound("Sounds/BOOM!.wav")
 
 
 class Player(arcade.Sprite):
@@ -74,8 +77,6 @@ class PlayerShot(arcade.Sprite):
     A shot fired by the Player
     """
 
-    self.draw_hit_box(self, tuple[1, 4, 6], line_thickness=0)
-
     def __init__(self, center_x=0, center_y
     =0):
         """
@@ -97,10 +98,12 @@ class PlayerShot(arcade.Sprite):
 
     def update(self):
         """
-        Move the sprite
-        """
+            Move the sprite
+            """
 
         # Update y position
+
+        self.center_x = self.center_x
         self.center_y += self.change_y
         self.change_y += 0.2
 
@@ -110,7 +113,7 @@ class PlayerShot(arcade.Sprite):
 
 
 class Items(arcade.Sprite):
-    def __init__(self, center_x=0, center_y=150, ):
+    def __init__(self, center_x=0, center_y=150):
         stars = [
             "images/Power-ups/star_bronze.png",
             "images/Power-ups/star_silver.png",
@@ -130,7 +133,54 @@ class Items(arcade.Sprite):
         self.center_y += self.change_y
         self.angle += self.change_angle
 
-        if self.center_x < -SCREEN_HEIGHT:
+        if self.center_y < -SCREEN_HEIGHT:
+            self.kill()
+
+
+class PowerUps(arcade.Sprite):
+    def __init__(self, center_x=0, center_y=250):
+        costume = random.randint(1, 3)
+
+        if costume == 1:
+            name = "images/Power-ups/bolt_gold.png"
+        elif costume == 2:
+            name = "images/Power-ups/bold_silver.png"
+        else:
+            name = "images/Power-ups/bolt_bronze.png"
+
+        super().__init__(name, SPRITE_SCALING)
+
+        self.center_x = center_x
+        self.center_y = center_y
+        self.change_y = ITEM_SPEED * 3
+
+    def update(self):
+
+        self.center_x += self.change_x
+        self.center_y += self.change_y
+
+        if self.center_y < -SCREEN_HEIGHT:
+            self.kill()
+
+
+class ChargeShot(arcade.Sprite):
+    """
+    The special charge shot.
+    """
+
+    def __init__(self, center_x=0, center_y=0):
+        super().__init__(filename="images/Lasers/beams.png")
+
+        self.center_x = center_x
+        self.center_y = center_y
+        self.change_y = PLAYER_SHOT_SPEED * 3
+
+    def update(self):
+        # Update Y placement
+        self.center_y += self.change_y
+        self.change_y += 0.3
+
+        if self.center_y > SCREEN_HEIGHT:
             self.kill()
 
 
@@ -148,11 +198,20 @@ class MyGame(arcade.Window):
         super().__init__(width, height)
 
         # Variable that will hold a list of shots fired by the player
+        self.cooldown = 0
+        self.boom = None
+        self.charging = None
+        self.power = "Normal"
+        self.shoot_mode = None
+        self.power_up_list_effects = None
+        self.player_power_up_sound = None
         self.player_collect_sound = None
         self.item_sprite_list = None
         self.space_pressed = None
         self.player_shot_list = None
         self.player_shot_sound = None
+        self.power_up_sprite_list = None
+        self.charge_shot_list = None
 
         # Set up the player info
         self.player_sprite = None
@@ -204,10 +263,15 @@ class MyGame(arcade.Window):
         self.player_shot_list = arcade.SpriteList()
         self.player_sprite = arcade.SpriteList()
         self.item_sprite_list = arcade.SpriteList()
+        self.power_up_sprite_list = arcade.SpriteList()
+        self.charge_shot_list = arcade.SpriteList()
 
         # Shooting Sound
         self.player_shot_sound = arcade.Sound("Sounds/Pew.wav")
         self.player_collect_sound = arcade.Sound("Sounds/Coin.wav")
+        self.player_power_up_sound = arcade.Sound("Sounds/Win.wav")
+        self.charging = arcade.Sound("Sounds/Charging....wav")
+        self.boom = arcade.Sound("Sounds/BOOM!.wav")
 
         # Create a Player object
         self.player_sprite = Player(
@@ -221,6 +285,12 @@ class MyGame(arcade.Window):
                 center_y=SCREEN_HEIGHT
             )
             self.item_sprite_list.append(new_item)
+
+        self.power_up_list_effects = [
+            "charge",
+            "reload",
+            "double"
+        ]
 
     def on_draw(self):
         """
@@ -247,6 +317,23 @@ class MyGame(arcade.Window):
             arcade.color.WHITE  # Color of text
         )
 
+        self.power_up_sprite_list.draw()
+        self.charge_shot_list.draw()
+
+        arcade.draw_text(
+            "MODE: {}".format(self.power),  # Text to show
+            350,  # X position
+            SCREEN_HEIGHT - 20,  # Y position
+            arcade.color.WHITE  # Color of text
+        )
+
+        arcade.draw_text(
+            "COOLDOWN: {}".format(self.cooldown),  # Text to show
+            650,  # X position
+            SCREEN_HEIGHT - 20,  # Y position
+            arcade.color.WHITE  # Color of text
+        )
+
     def on_update(self, delta_time):
         """
         Movement and game logic
@@ -254,6 +341,7 @@ class MyGame(arcade.Window):
 
         # Calculate player speed based on the keys pressed
         self.player_sprite.change_x = 0
+        self.player_sprite.change_y = 0
 
         # Move player with keyboard
         if self.left_pressed and not self.right_pressed:
@@ -289,6 +377,44 @@ class MyGame(arcade.Window):
             self.player_collect_sound.play()
             self.player_score += 10
 
+        self.power_up_sprite_list.update()
+
+        new_power_up = PowerUps(
+            center_x=random.randrange(SCREEN_WIDTH),
+            center_y=SCREEN_HEIGHT
+        )
+
+        new_shot = PlayerShot(
+            center_x=self.player_sprite.center_x,
+            center_y=self.player_sprite.center_y
+        )
+
+        if self.power == "reload":
+            if random.randint(1, 30) == 3:
+                self.player_shot_list.append(new_shot)
+                self.player_shot_sound.play()
+
+        if random.randint(1, 100) == 7:
+            self.power_up_sprite_list.append(new_power_up)
+        power_up_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.power_up_sprite_list)
+
+        for hits in power_up_hit_list:
+            self.power = random.choice(self.power_up_list_effects)
+            hits.remove_from_sprite_lists()
+            self.player_power_up_sound.play()
+            self.player_score += 30
+            if self.power == "charge":
+                self.shoot_mode = "charge"
+            elif self.power == "reload":
+                self.shoot_mode = "reload"
+            elif self.power == "double":
+                self.shoot_mode = "double"
+
+        self.charge_shot_list.update()
+
+        if self.cooldown > 0:
+            if random.randint(1, 25) == 1:
+                self.cooldown -= 1
 
     def on_key_press(self, key, modifiers):
         """
@@ -308,13 +434,33 @@ class MyGame(arcade.Window):
             self.space_pressed = True
 
         if key == FIRE_KEY:
-            new_shot = PlayerShot(
-                self.player_sprite.center_x,
-                self.player_sprite.center_y,
-            )
+            if self.power != "charge" and self.power != "double":
+                new_shot = PlayerShot(
+                    self.player_sprite.center_x,
+                    self.player_sprite.center_y,
+                )
 
-            self.player_shot_list.append(new_shot)
-            self.player_shot_sound.play()
+                self.player_shot_list.append(new_shot)
+                self.player_shot_sound.play()
+
+            elif self.power == "double":
+
+                new_shot1 = PlayerShot(
+                    self.player_sprite.center_x + 7,
+                    self.player_sprite.center_y,
+                )
+                new_shot2 = PlayerShot(
+                    self.player_sprite.center_x - 7,
+                    self.player_sprite.center_y,
+                )
+                self.player_shot_list.append(new_shot1)
+                self.player_shot_sound.play()
+                self.player_shot_list.append(new_shot2)
+                self.player_shot_sound.play()
+
+            else:
+                if self.cooldown == 0:
+                    self.charging.play()
 
     def on_key_release(self, key, modifiers):
         """
@@ -330,7 +476,16 @@ class MyGame(arcade.Window):
         elif key == arcade.key.RIGHT:
             self.right_pressed = False
         elif key == arcade.key.SPACE:
-            self.space_pressed = True
+            self.space_pressed = False
+
+        if key == FIRE_KEY and self.power == "charge" and self.cooldown == 0:
+            charge_shot = ChargeShot(
+                self.player_sprite.center_x,
+                self.player_sprite.center_y,
+            )
+            self.charge_shot_list.append(charge_shot)
+            self.boom.play()
+            self.cooldown = 5
 
     def on_joybutton_press(self, joystick, button_no):
         print("Button pressed:", button_no)
